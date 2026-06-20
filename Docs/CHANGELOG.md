@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.5
+
+CLI: uninstall command.
+
+### New
+- **`saidso uninstall`** — uninstall the installed `saidso` package via pip
+  (`pip uninstall -y saidso`), mirroring `saidso upgrade`. Falls back to a clear
+  message if pip is unavailable in the environment.
+
 ## 0.4.4
 
 Correction-aware grounding + production hardening.

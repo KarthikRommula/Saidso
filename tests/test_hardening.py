@@ -272,6 +272,15 @@ def test_upgrade_reports_when_pip_missing(monkeypatch, capsys):
     assert "could not run pip" in capsys.readouterr().err
 
 
+def test_uninstall_reports_when_pip_missing(monkeypatch, capsys):
+    def boom(cmd):
+        raise OSError("no pip here")
+
+    monkeypatch.setattr("saidso.cli.subprocess.call", boom)
+    assert main(["uninstall"]) == 1
+    assert "could not run pip" in capsys.readouterr().err
+
+
 # --------------------------------------------------------------------------- #
 # Result contracts — steer-back phrasing
 # --------------------------------------------------------------------------- #

@@ -123,6 +123,22 @@ def _cmd_upgrade(_args: argparse.Namespace) -> int:
         return 1
 
 
+def _cmd_uninstall(_args: argparse.Namespace) -> int:
+    """Uninstall the installed saidso package, via pip."""
+    cmd = [sys.executable, "-m", "pip", "uninstall", "-y", "saidso"]
+    print("$ " + " ".join(cmd))
+    try:
+        # Fixed argv (no shell, no user input) — safe by construction.
+        return subprocess.call(cmd)  # nosec B603
+    except OSError as exc:  # pip not available in this environment
+        print(
+            f"saidso: could not run pip ({exc}). Uninstall manually with "
+            "`pip uninstall saidso`.",
+            file=sys.stderr,
+        )
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="saidso",
@@ -135,6 +151,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("upgrade", help="upgrade saidso to the latest release on PyPI (via pip)") \
         .set_defaults(func=_cmd_upgrade)
+
+    sub.add_parser("uninstall", help="uninstall the saidso package (via pip)") \
+        .set_defaults(func=_cmd_uninstall)
 
     dc = sub.add_parser("docs", help="show saidso documentation in the terminal")
     dc.add_argument("topic", nargs="?", help="topic to show (default: overview)")

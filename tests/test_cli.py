@@ -42,7 +42,7 @@ def test_help_lists_all_commands(capsys):
         main(["--help"])
     assert exc.value.code == 0
     out = capsys.readouterr().out
-    for command in ("version", "upgrade", "quickstart"):
+    for command in ("version", "upgrade", "uninstall", "quickstart"):
         assert command in out
 
 
@@ -82,3 +82,17 @@ def test_upgrade_invokes_pip(monkeypatch, capsys):
     cmd = captured["cmd"]
     assert cmd[:3] == [sys.executable, "-m", "pip"]
     assert "--upgrade" in cmd and "saidso" in cmd
+
+
+def test_uninstall_invokes_pip(monkeypatch, capsys):
+    captured = {}
+
+    def fake_call(cmd):
+        captured["cmd"] = cmd
+        return 0
+
+    monkeypatch.setattr("saidso.cli.subprocess.call", fake_call)
+    assert main(["uninstall"]) == 0
+    cmd = captured["cmd"]
+    assert cmd[:3] == [sys.executable, "-m", "pip"]
+    assert "uninstall" in cmd and "-y" in cmd and "saidso" in cmd
