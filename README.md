@@ -175,6 +175,17 @@ def test_invented_dob_is_blocked():
 
 ---
 
+## CLI
+
+saidso is a library (it runs inside your agent), with a small CLI for convenience:
+
+```bash
+saidso --version            # or: saidso version
+saidso quickstart           # scaffold a runnable demo + GETTING_STARTED.md
+saidso quickstart my-dir    # ...into a folder of your choice
+python -m saidso --version  # module form also works
+```
+
 ## Examples & docs
 
 - [`examples/quickstart.py`](examples/quickstart.py) — writes, reads, and observability in one file.

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "saidso"
-version = "0.4.0"
+version = "0.4.1"
 description = "A grounding firewall for action-taking AI agents: refuse any tool argument the user never actually said, with a transcript-linked audit trail."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -38,8 +38,13 @@ dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "rapidfuzz>=3.0"]
 [project.urls]
 Homepage = "https://pypi.org/project/saidso/"
 
+[project.scripts]
+saidso = "saidso.cli:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["saidso"]
+# Bundle the quickstart templates the `saidso quickstart` command scaffolds.
+include = ["saidso/_templates/*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.1
+
+A small command-line interface (stdlib only).
+
+### New
+- **`saidso` CLI** via a console-script entry point:
+  - `saidso --version` / `saidso version` — print the installed version.
+  - `saidso quickstart [DIR]` — scaffold a runnable example (`quickstart.py`) and
+    a `GETTING_STARTED.md` into a folder (default `saidso-quickstart/`).
+  - `python -m saidso` works as an alias.
+- Quickstart templates are bundled in the wheel, so the CLI works from a plain
+  `pip install saidso` (no repo checkout needed).
+
 ## 0.4.0
 
 Deterministic grounded speech — the production side of "reads". Make a
