@@ -11,6 +11,9 @@ In-terminal documentation.
   Lightly styled headings on a TTY. Doc pages are bundled in the wheel, so this
   works from a plain `pip install saidso`.
 
+### Changed
+- Removed the `--version` / `-V` flag; use the `saidso version` subcommand.
+
 ## 0.4.1
 
 A small command-line interface (stdlib only).

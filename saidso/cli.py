@@ -126,9 +126,6 @@ def build_parser() -> argparse.ArgumentParser:
         prog="saidso",
         description="A grounding firewall for action-taking AI agents.",
     )
-    parser.add_argument(
-        "-V", "--version", action="version", version=f"saidso {__version__}"
-    )
     sub = parser.add_subparsers(dest="command", title="commands", metavar="<command>")
 
     sub.add_parser("version", help="print the installed saidso version") \
