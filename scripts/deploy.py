@@ -100,6 +100,13 @@ def load_token(env_file: Path) -> dict[str, str]:
         elif line.startswith("pypi-"):  # bare token on its own line
             env.setdefault("TWINE_USERNAME", "__token__")
             env["TWINE_PASSWORD"] = line
+    # Accept common alternate key names (e.g. uv's UV_PUBLISH_TOKEN) as the
+    # twine password if TWINE_PASSWORD itself wasn't provided.
+    if not env.get("TWINE_PASSWORD"):
+        for alt in ("UV_PUBLISH_TOKEN", "TWINE_API_TOKEN", "PYPI_TOKEN"):
+            if env.get(alt):
+                env["TWINE_PASSWORD"] = env[alt]
+                break
     if not env.get("TWINE_PASSWORD"):
         sys.exit(f"deploy: no PyPI token found in {env_file.name}")
     env.setdefault("TWINE_USERNAME", "__token__")
