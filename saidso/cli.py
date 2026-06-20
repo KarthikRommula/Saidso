@@ -121,7 +121,7 @@ def _cmd_version(_args: argparse.Namespace) -> int:
 
 def _cmd_upgrade(_args: argparse.Namespace) -> int:
     """Upgrade the installed saidso to the latest release on PyPI, via pip."""
-    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "saidso"]
+    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", "saidso"]
     print("$ " + " ".join(cmd))
     try:
         # Fixed argv (no shell, no user input) — safe by construction.
@@ -129,7 +129,7 @@ def _cmd_upgrade(_args: argparse.Namespace) -> int:
     except OSError as exc:  # pip not available in this environment
         print(
             f"saidso: could not run pip ({exc}). Upgrade manually with "
-            "`pip install --upgrade saidso`.",
+            "`pip install --upgrade --no-cache-dir saidso`.",
             file=sys.stderr,
         )
         return 1

@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Build and publish to PyPI
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dev dependencies
+        run: |
+          pip install --upgrade pip
+          pip install build twine pytest pytest-asyncio pytest-cov ruff mypy bandit rapidfuzz pip-audit
+
+      - name: Quality gates
+        run: |
+          python -m ruff check saidso tests
+          python -m mypy saidso
+          python -m bandit -r saidso -c pyproject.toml -q
+          python -m pytest -q
+
+      - name: Build
+        run: python -m build
+
+      - name: Validate artifacts
+        run: python -m twine check dist/*
+
+      - name: Publish to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        run: python -m twine upload dist/*
