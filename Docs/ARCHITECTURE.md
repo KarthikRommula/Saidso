@@ -35,7 +35,7 @@ saidso/
 └─ testing.py         GroundingCase, replay — CI replay harness
 ```
 
-**Two layers, on purpose.** The top-level modules are the framework's *first-class
+**Two layers, on purpose.** The top-level modules are the library's *first-class
 concepts* (flat, because each is a public idea). `speech/` groups the two reads
 tools that form one domain. `_matching/` hides the fuzzy-matching machinery behind a
 leading underscore — internal, may change without notice.

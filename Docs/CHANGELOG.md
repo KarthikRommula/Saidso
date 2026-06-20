@@ -5,7 +5,7 @@
 In-terminal documentation.
 
 ### New
-- **`saidso docs [TOPIC]`** — read the framework docs in the terminal (overview,
+- **`saidso docs [TOPIC]`** — read the saidso docs in the terminal (overview,
   quickstart, writes, policies, reads, observability, testing, integrate).
   `saidso docs` shows the overview; `saidso docs --list` lists all topics.
   Lightly styled headings on a TTY. Doc pages are bundled in the wheel, so this
