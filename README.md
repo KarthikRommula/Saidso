@@ -182,6 +182,7 @@ saidso is a library (it runs inside your agent), with a small CLI for convenienc
 ```bash
 saidso --help               # list all commands
 saidso --version            # or: saidso version
+saidso docs                 # read the docs in your terminal (saidso docs --list)
 saidso upgrade              # upgrade to the latest release on PyPI
 saidso quickstart           # scaffold a runnable demo + GETTING_STARTED.md
 saidso quickstart my-dir    # ...into a folder of your choice

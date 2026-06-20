@@ -17,8 +17,11 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import __version__
+from .observe import _enable_windows_ansi, _supports_color
 
 _TEMPLATES = "_templates"
+_DOCS = "_docs"
+_DEFAULT_TOPIC = "overview"
 
 
 def _write_templates(dest: Path) -> List[str]:
@@ -44,6 +47,57 @@ def _cmd_quickstart(args: argparse.Namespace) -> int:
     runnable = next((n for n in names if n.endswith(".py")), None)
     if runnable:
         print(f"Try it:  python {dest / runnable}")
+    return 0
+
+
+def _docs_dir():
+    return resources.files(__package__) / _DOCS
+
+
+def _doc_topics() -> List[str]:
+    return sorted(
+        e.name[:-3] for e in _docs_dir().iterdir() if e.name.endswith(".md")
+    )
+
+
+def _render_markdown(text: str, color: bool) -> str:
+    """Light terminal styling: bold/cyan headings. Body is left as readable text."""
+    if not color:
+        return text
+    bold, cyan, reset = "\033[1m", "\033[36m", "\033[0m"
+    out: List[str] = []
+    for line in text.splitlines():
+        if line.startswith("# "):
+            out.append(f"{bold}{cyan}{line[2:]}{reset}")
+        elif line.startswith("## "):
+            out.append(f"{bold}{line[3:]}{reset}")
+        elif line.startswith("### "):
+            out.append(f"{bold}{line[4:]}{reset}")
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def _cmd_docs(args: argparse.Namespace) -> int:
+    topics = _doc_topics()
+    if args.list:
+        print("saidso documentation topics:")
+        for t in topics:
+            print(f"  saidso docs {t}")
+        return 0
+    topic = args.topic or _DEFAULT_TOPIC
+    page = _docs_dir() / f"{topic}.md"
+    if not page.is_file():
+        print(f"saidso: no docs topic {topic!r}", file=sys.stderr)
+        print("available: " + ", ".join(topics), file=sys.stderr)
+        return 1
+    color = _supports_color(sys.stdout)
+    if color:
+        _enable_windows_ansi()
+    print(_render_markdown(page.read_text(encoding="utf-8"), color))
+    if not args.topic:  # showed the default page -> point at the rest
+        others = ", ".join(t for t in topics if t != _DEFAULT_TOPIC)
+        print(f"\nmore: {others}\nread one with:  saidso docs <topic>")
     return 0
 
 
@@ -82,6 +136,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("upgrade", help="upgrade saidso to the latest release on PyPI (via pip)") \
         .set_defaults(func=_cmd_upgrade)
+
+    dc = sub.add_parser("docs", help="show saidso documentation in the terminal")
+    dc.add_argument("topic", nargs="?", help="topic to show (default: overview)")
+    dc.add_argument("--list", action="store_true", help="list all topics")
+    dc.set_defaults(func=_cmd_docs)
 
     qs = sub.add_parser(
         "quickstart",
