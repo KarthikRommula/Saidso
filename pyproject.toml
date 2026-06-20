@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "saidso"
-version = "0.4.3"
+version = "0.4.4"
 description = "A grounding firewall for action-taking AI agents: refuse any tool argument the user never actually said, with a transcript-linked audit trail."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -15,7 +15,7 @@ keywords = [
     "tool-use", "llm", "provenance", "audit", "firewall",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -32,7 +32,16 @@ dependencies = []  # zero required deps; rapidfuzz used if present
 
 [project.optional-dependencies]
 fast = ["rapidfuzz>=3.0"]
-dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "rapidfuzz>=3.0"]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "rapidfuzz>=3.0",
+    "ruff>=0.6",
+    "mypy>=1.8",
+    "bandit>=1.7",
+    "pip-audit>=2.7",
+]
 
 # No GitHub repo — the PyPI project page (rendered from README.md) is the home.
 [project.urls]
@@ -49,3 +58,48 @@ include = ["saidso/_templates/*", "saidso/_docs/*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--cov=saidso --cov-report=term-missing --cov-fail-under=90"
+
+[tool.coverage.run]
+branch = true
+source = ["saidso"]
+omit = ["saidso/_templates/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+extend-exclude = ["saidso/_templates"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "C4", "SIM", "RUF"]
+ignore = ["B008", "SIM105"]
+
+[tool.mypy]
+# 3.10 is mypy's minimum analysis target; runtime support stays 3.9 via
+# `from __future__ import annotations` (ruff enforces py39 syntax separately).
+python_version = "3.10"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Keep the bug-catching strict checks (return-any, implicit-optional, type-args)
+# but don't mandate annotations on every private helper — that is style, not
+# safety, and the public API is fully typed (ships py.typed).
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disallow_untyped_calls = false
+exclude = ["saidso/_templates", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["rapidfuzz.*"]
+ignore_missing_imports = true
+
+[tool.bandit]
+exclude_dirs = ["tests", "saidso/_templates"]

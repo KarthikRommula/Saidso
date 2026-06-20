@@ -9,18 +9,17 @@ from __future__ import annotations
 
 import re
 from datetime import date, timedelta
-from typing import Optional, Set
 
 __all__ = [
-    "normalize_text",
+    "date_components_present",
     "digits_only",
-    "words_to_int",
     "find_numbers",
     "find_years",
-    "normalize_phone",
-    "phones_match",
     "normalize_date",
-    "date_components_present",
+    "normalize_phone",
+    "normalize_text",
+    "phones_match",
+    "words_to_int",
 ]
 
 # --------------------------------------------------------------------------- #
@@ -85,7 +84,7 @@ def _tokens(s: str) -> list[str]:
     return re.split(r"[\s,]+", s.lower().strip()) if s else []
 
 
-def words_to_int(s: str) -> Optional[int]:
+def words_to_int(s: str) -> int | None:
     """Convert a cardinal number phrase to an int.
 
     Handles forms like ``"forty two"``, ``"two thousand five"``,
@@ -126,9 +125,9 @@ def words_to_int(s: str) -> Optional[int]:
     return total + current if seen else None
 
 
-def find_numbers(s: str) -> Set[int]:
+def find_numbers(s: str) -> set[int]:
     """All integers mentioned in ``s`` as digits or words."""
-    out: Set[int] = set()
+    out: set[int] = set()
     if not s:
         return out
     # join comma-grouped digits ("1,234" -> "1234") before extraction
@@ -139,7 +138,7 @@ def find_numbers(s: str) -> Set[int]:
     toks = _tokens(normalize_text(s))
     run: list[str] = []
     numbery = set(_UNITS) | set(_TENS) | set(_SCALES) | {"and"}
-    for tok in toks + ["<end>"]:
+    for tok in [*toks, "<end>"]:
         if tok in numbery:
             run.append(tok)
         else:
@@ -156,9 +155,9 @@ def find_numbers(s: str) -> Set[int]:
 # --------------------------------------------------------------------------- #
 
 
-def find_years(s: str) -> Set[int]:
+def find_years(s: str) -> set[int]:
     """Plausible 4-digit years in ``s`` (digits or spoken)."""
-    out: Set[int] = set()
+    out: set[int] = set()
     if not s:
         return out
     norm = normalize_text(s)
@@ -238,7 +237,7 @@ def _strip_ordinal_suffix(tok: str) -> str:
     return re.sub(r"(\d+)(st|nd|rd|th)\b", r"\1", tok)
 
 
-def normalize_date(s: str, now: Optional[date] = None) -> Optional[str]:
+def normalize_date(s: str, now: date | None = None) -> str | None:
     """Best-effort parse of a date expression to ISO ``YYYY-MM-DD``.
 
     Returns ``None`` if no confident date can be extracted.
@@ -331,7 +330,7 @@ def date_components_present(iso: str, text: str) -> bool:
     return year_ok and month_ok and day_ok
 
 
-def _relative_date(raw: str, now: Optional[date]) -> Optional[date]:
+def _relative_date(raw: str, now: date | None) -> date | None:
     if "today" in raw:
         return now or date.today()
     if "tomorrow" in raw:
@@ -356,7 +355,7 @@ def _int_to_words(n: int) -> str:
     return _INT_WORDS.get(n, str(n))
 
 
-def _iso(y: int, mo: int, d: int) -> Optional[str]:
+def _iso(y: int, mo: int, d: int) -> str | None:
     try:
         return date(y, mo, d).isoformat()
     except ValueError:

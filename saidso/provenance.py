@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 from .context import CallContext, get_context
 from .result import ArgFinding, GroundingResult, SteerBack
@@ -41,15 +41,15 @@ logger = logging.getLogger("saidso")
 # --------------------------------------------------------------------------- #
 
 
-def _n_exact(v: Any) -> Optional[str]:
+def _n_exact(v: Any) -> str | None:
     return None if v is None else str(v).strip()
 
 
-def _n_casefold(v: Any) -> Optional[str]:
+def _n_casefold(v: Any) -> str | None:
     return None if v is None else str(v).strip().casefold()
 
 
-def _n_e164(v: Any) -> Optional[str]:
+def _n_e164(v: Any) -> str | None:
     if v is None:
         return None
     digits = "".join(c for c in str(v) if c.isdigit())
@@ -62,7 +62,7 @@ def _n_e164(v: Any) -> Optional[str]:
 _ISO_MINUTE_RE = re.compile(r"\s*(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})")
 
 
-def _n_datetime_minute(v: Any) -> Optional[str]:
+def _n_datetime_minute(v: Any) -> str | None:
     """Wall-clock minute, ignoring seconds and timezone-offset formatting.
 
     The Live model rebuilds an ISO timestamp from a spoken time, getting the
@@ -80,7 +80,7 @@ def _n_datetime_minute(v: Any) -> Optional[str]:
         return None
 
 
-def _n_money(v: Any) -> Optional[str]:
+def _n_money(v: Any) -> str | None:
     if v is None:
         return None
     cleaned = "".join(c for c in str(v) if c.isdigit() or c in ".-")
@@ -90,7 +90,7 @@ def _n_money(v: Any) -> Optional[str]:
         return None
 
 
-_NORMALIZERS: Dict[str, Callable[[Any], Optional[str]]] = {
+_NORMALIZERS: dict[str, Callable[[Any], str | None]] = {
     "exact": _n_exact,
     "casefold": _n_casefold,
     "e164": _n_e164,
@@ -113,7 +113,7 @@ class FromTool:
     (e.g. a ``doctor_id`` from ``list_doctors`` OR from an existing appointment).
     """
 
-    sources: tuple  # tuple[tuple[str, str], ...] of (tool_name, key)
+    sources: tuple[tuple[str, str], ...]  # of (tool_name, key)
     normalize: str = "exact"
     allow_single_candidate: bool = True
 
@@ -140,15 +140,16 @@ def from_tool(
     """
     if not sources:
         raise ValueError("from_tool requires at least one (tool, key) source")
+    pairs: tuple[tuple[str, str], ...]
     if isinstance(sources[0], str):  # single-source form: from_tool("tool", "key")
         if len(sources) != 2 or not all(isinstance(s, str) for s in sources):
             raise ValueError("single-source form is from_tool(tool, key)")
         pairs = ((sources[0], sources[1]),)
     else:  # multi-source form: from_tool(("t","k"), ("t2","k2"), ...)
-        pairs = tuple(tuple(s) for s in sources)
-        for s in pairs:
+        for s in sources:
             if len(s) != 2 or not all(isinstance(x, str) for x in s):
                 raise ValueError("each source must be a (tool, key) pair of strings")
+        pairs = tuple((s[0], s[1]) for s in sources)
     if normalize not in _NORMALIZERS:
         raise ValueError(
             f"unknown normalizer {normalize!r}; choose from {sorted(_NORMALIZERS)}"
@@ -166,17 +167,17 @@ class ToolLedger:
     """
 
     def __init__(self) -> None:
-        self._rows: Dict[str, List[dict]] = {}
+        self._rows: dict[str, list[dict[str, Any]]] = {}
 
     def record(self, tool: str, rows: Any) -> None:
-        out: List[dict] = []
+        out: list[dict[str, Any]] = []
         for r in rows or []:
             if isinstance(r, dict):
                 out.append(dict(r))
         self._rows[tool] = out
 
-    def candidates(self, tool: str, key: str) -> List[Any]:
-        out: List[Any] = []
+    def candidates(self, tool: str, key: str) -> list[Any]:
+        out: list[Any] = []
         for r in self._rows.get(tool, ()):  # single dict.get per row (hot path)
             v = r.get(key)
             if v is not None:
@@ -193,9 +194,10 @@ class ToolLedger:
 
 
 class Status(str, Enum):
-    PASS_EXACT = "pass_exact"
-    PASS_NORMALIZED = "pass_normalized"
-    PASS_SINGLE = "pass_single"
+    # "pass_*" are resolution outcomes, not credentials (bandit B105 false positive).
+    PASS_EXACT = "pass_exact"  # nosec B105
+    PASS_NORMALIZED = "pass_normalized"  # nosec B105
+    PASS_SINGLE = "pass_single"  # nosec B105
     BLOCK_NO_VALUE = "block_no_value"
     BLOCK_NO_CANDIDATES = "block_no_candidates"
     BLOCK_NO_MATCH = "block_no_match"
@@ -211,7 +213,7 @@ class Resolution:
 
     status: Status
     canonical: Any = None
-    candidates: List[Any] = field(default_factory=list)
+    candidates: list[Any] = field(default_factory=list)
     reason: str = ""
 
     @property
@@ -243,16 +245,20 @@ def reconcile(
 
     # 1. raw-exact (object equality, then string equality for int/str drift)
     if value in cands:
-        return Resolution(Status.PASS_EXACT, canonical=value, candidates=cands, reason="exact match")
+        return Resolution(
+            Status.PASS_EXACT, canonical=value, candidates=cands, reason="exact match"
+        )
     sval = str(value).strip()
     for c in cands:
         if str(c).strip() == sval:
-            return Resolution(Status.PASS_EXACT, canonical=c, candidates=cands, reason="exact match")
+            return Resolution(
+                Status.PASS_EXACT, canonical=c, candidates=cands, reason="exact match"
+            )
 
     # 2. unique normalized match
     nv = norm(value)
     if nv is not None:
-        matches: List[Any] = []
+        matches: list[Any] = []
         seen = set()
         for c in cands:
             if norm(c) == nv:
@@ -278,7 +284,9 @@ def reconcile(
             reason="only one candidate was returned",
         )
 
-    return Resolution(Status.BLOCK_NO_MATCH, candidates=cands, reason="value matches no tool output")
+    return Resolution(
+        Status.BLOCK_NO_MATCH, candidates=cands, reason="value matches no tool output"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -300,7 +308,7 @@ class _Call:
         self.kwargs = kwargs
 
 
-def grounded_outputs(**specs: FromTool) -> Callable:
+def grounded_outputs(**specs: FromTool) -> Callable[..., Any]:
     """Ground tool arguments against prior tool output (see module docstring).
 
     Apply *inside* the platform's tool decorator. On a block the body never runs
@@ -315,7 +323,7 @@ def grounded_outputs(**specs: FromTool) -> Callable:
                 f"@grounded_outputs: {name!r} must be from_tool(...), got {type(spec).__name__}"
             )
 
-    def decorate(fn: Callable) -> Callable:
+    def decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
         sig = inspect.signature(fn)
         params = sig.parameters
         has_var_kw = any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values())
@@ -336,12 +344,12 @@ def grounded_outputs(**specs: FromTool) -> Callable:
             Returns ``(failed, passed, rewrites)`` — ``rewrites`` maps each
             passing arg to its canonical tool value. Shared by both call paths.
             """
-            failed: List[ArgFinding] = []
-            passed: List[ArgFinding] = []
-            rewrites: Dict[str, Any] = {}
+            failed: list[ArgFinding] = []
+            passed: list[ArgFinding] = []
+            rewrites: dict[str, Any] = {}
             for name, spec in spec_items:
                 value = get_value(name)
-                cands: List[Any] = []
+                cands: list[Any] = []
                 if ledger is not None:
                     for tool, key in spec.sources:
                         cands.extend(ledger.candidates(tool, key))
@@ -426,7 +434,7 @@ def grounded_outputs(**specs: FromTool) -> Callable:
                     return outcome
                 return await fn(*outcome.args, **outcome.kwargs)
 
-            awrapper.__provenance_specs__ = specs
+            awrapper.__provenance_specs__ = specs  # type: ignore[attr-defined]
             return awrapper
 
         @functools.wraps(fn)
@@ -438,7 +446,7 @@ def grounded_outputs(**specs: FromTool) -> Callable:
                 return outcome
             return fn(*outcome.args, **outcome.kwargs)
 
-        swrapper.__provenance_specs__ = specs
+        swrapper.__provenance_specs__ = specs  # type: ignore[attr-defined]
         return swrapper
 
     return decorate

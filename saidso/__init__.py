@@ -23,8 +23,9 @@ Quick start::
 from __future__ import annotations
 
 from .attestation import Attestation, AttestationLog
-from .context import CallContext, call_context, get_context, set_context, reset_context
+from .context import CallContext, call_context, get_context, reset_context, set_context
 from .grounding import GroundingBlocked, GroundingConfig, grounded
+from .observe import EventRecorder, enable_pretty_logging, summary
 from .policy import DEFAULT_THRESHOLDS, Policy
 from .provenance import (
     FromTool,
@@ -35,7 +36,6 @@ from .provenance import (
     grounded_outputs,
     reconcile,
 )
-from .observe import EventRecorder, enable_pretty_logging, summary
 from .result import ArgFinding, GroundingResult, Span, SteerBack
 from .speech import (
     BlockedFact,
@@ -51,49 +51,49 @@ from .speech import (
 )
 from .transcript import AGENT, SYSTEM, USER, Transcript, Turn
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 __all__ = [
-    "grounded",
-    "Policy",
-    "Transcript",
-    "Turn",
-    "USER",
     "AGENT",
+    "DEFAULT_THRESHOLDS",
     "SYSTEM",
-    "call_context",
-    "CallContext",
-    "get_context",
-    "set_context",
-    "reset_context",
-    "SteerBack",
-    "GroundingResult",
-    "GroundingConfig",
-    "GroundingBlocked",
-    "grounded_outputs",
-    "from_tool",
-    "FromTool",
-    "ToolLedger",
-    "reconcile",
-    "Resolution",
-    "Status",
-    "render_spoken",
-    "try_render_spoken",
-    "fact",
-    "Fact",
-    "UngroundedSpeech",
-    "BlockedFact",
-    "find_ungrounded_names",
-    "check_spoken_names",
-    "find_name_mentions",
-    "SpokenName",
-    "Span",
+    "USER",
     "ArgFinding",
     "Attestation",
     "AttestationLog",
-    "enable_pretty_logging",
-    "summary",
+    "BlockedFact",
+    "CallContext",
     "EventRecorder",
-    "DEFAULT_THRESHOLDS",
+    "Fact",
+    "FromTool",
+    "GroundingBlocked",
+    "GroundingConfig",
+    "GroundingResult",
+    "Policy",
+    "Resolution",
+    "Span",
+    "SpokenName",
+    "Status",
+    "SteerBack",
+    "ToolLedger",
+    "Transcript",
+    "Turn",
+    "UngroundedSpeech",
     "__version__",
+    "call_context",
+    "check_spoken_names",
+    "enable_pretty_logging",
+    "fact",
+    "find_name_mentions",
+    "find_ungrounded_names",
+    "from_tool",
+    "get_context",
+    "grounded",
+    "grounded_outputs",
+    "reconcile",
+    "render_spoken",
+    "reset_context",
+    "set_context",
+    "summary",
+    "try_render_spoken",
 ]

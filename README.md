@@ -55,6 +55,8 @@ def book_appointment(slot_start): ...
 - A **fabricated** id/slot/name → blocked, the agent is steered to re-ask.
 - A value the model **rebuilt slightly wrong** (right time, wrong timezone) → it's
   rewritten to the **canonical** value the tool actually returned, then committed.
+- A value the caller **took back** ("my *old* number was X **but use** Y", "*not*
+  John, it's Maria") → the retracted value is refused; only the replacement grounds.
 
 ### 2. Reads — what the agent *says*
 
@@ -200,7 +202,12 @@ python -m saidso version    # module form also works
 
 ```bash
 pip install -e ".[dev]"
-pytest -q
+
+pytest -q                       # tests + coverage gate (≥90%)
+ruff check saidso tests         # lint
+mypy saidso                     # types (strict bug-checks; ships py.typed)
+bandit -r saidso -c pyproject.toml   # security lint
+pip-audit                       # dependency CVEs (zero required deps)
 ```
 
 ## License

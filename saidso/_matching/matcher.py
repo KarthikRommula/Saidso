@@ -22,15 +22,16 @@ Design rules that keep this production-safe:
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, List, Optional, Sequence
+from typing import Any
 
-from . import normalize as N
-from .fuzz import partial_ratio, ratio
 from ..policy import Policy
 from ..result import GroundingResult, Span
 from ..transcript import Transcript, Turn
+from . import normalize as N
+from .fuzz import partial_ratio, ratio
 
 # Tunables (conservative by default).
 _MIN_FUZZY_TOKEN = 0.85  # per-token fuzzy floor for name/text matching
@@ -126,6 +127,138 @@ def _best_word_score(token: str, words: Sequence[str]) -> float:
 
 
 # --------------------------------------------------------------------------- #
+# Supersession / retraction guard
+# --------------------------------------------------------------------------- #
+#
+# A value may *appear* in caller speech and yet have been explicitly taken back
+# ("my OLD number was 555-1234 but use 555-9999", "my name is NOT John"). The
+# deterministic matchers below would otherwise ground the retracted value just
+# because its characters are present. This guard locates the value's mention(s)
+# inside the turn and refuses any mention that is either:
+#
+#   * preceded by a retraction cue ("old", "previous", "not", "instead of"), or
+#   * followed — across a correction pivot ("but", "i mean") — by a competing
+#     value of the *same kind*.
+#
+# It is intentionally conservative: it only *removes* false grounds, so when it
+# is unsure it leaves the mention live (the threshold checks still apply). It is
+# a heuristic for common self-corrections, not a semantic intent model; an
+# ambiguous correction can still slip through (see ROADMAP's verifier hook).
+
+# Clause boundaries between a possibly-retracted value and its replacement:
+# explicit correction pivots, plus clause punctuation (commas / sentence ends).
+# Punctuation only splits when followed by space/end, so it never breaks a
+# grouped number ("1,234") or a dotted value ("555.1234"). Note: "instead" /
+# "rather" are NOT pivots — "instead of X" drops X, so they are retraction
+# phrases below, not replacement markers.
+_PIVOTS = r"\b(?:but|however|i mean|scratch that|no wait|never\s?mind)\b"
+_CLAUSE_SPLIT_RE = re.compile(_PIVOTS + r"|[,;.!?]+(?:\s+|$)", re.IGNORECASE)
+# Pivot-only split for values that naturally span punctuation — a date is
+# spoken as "January first, nineteen ninety", so commas must NOT break it.
+_PIVOT_ONLY_RE = re.compile(_PIVOTS, re.IGNORECASE)
+# Cues that, sitting just before a value, retract *that* value.
+_RETRACT_WORDS = {
+    "old", "previous", "former", "not", "no", "isnt", "wasnt", "arent",
+    "werent", "wrong", "incorrect", "dont", "doesnt",
+}
+_RETRACT_PHRASES = (
+    "used to be", "used to", "no longer", "instead of", "rather than",
+    "get rid of",
+)
+
+
+def _clauses(text: str, splitter: re.Pattern[str] = _CLAUSE_SPLIT_RE) -> list[str]:
+    """Split a turn into ordered clauses at correction pivots / clause breaks."""
+    parts = splitter.split(text or "")
+    return [p for p in (s.strip() for s in parts) if p]
+
+
+def _retracted_before(clause: str, anchor: re.Pattern[str]) -> bool:
+    """True if a retraction cue sits in the few words just before the value."""
+    norm = N.normalize_text(clause)
+    m = anchor.search(norm)
+    if not m:
+        return False
+    prev = norm[: m.start()].split()[-3:]  # only the adjacent words count
+    window = " ".join(prev)
+    if any(ph in window for ph in _RETRACT_PHRASES):
+        return True
+    return any(w in _RETRACT_WORDS for w in prev)
+
+
+def _clause_retracts(clause: str) -> bool:
+    """Clause-level cue (used where the value cannot be character-anchored)."""
+    norm = N.normalize_text(clause)
+    if any(ph in norm for ph in _RETRACT_PHRASES):
+        return True
+    return bool(set(norm.split()) & _RETRACT_WORDS)
+
+
+def _has_live_mention(text, contains, competing, retracted, splitter=_CLAUSE_SPLIT_RE) -> bool:
+    """True if some clause mentions the value without being retracted/superseded.
+
+    ``contains(clause)`` -> value present; ``competing(clause)`` -> a different
+    same-kind value present; ``retracted(clause)`` -> the value is taken back.
+    """
+    clauses = _clauses(text, splitter)
+    present = [i for i, c in enumerate(clauses) if contains(c)]
+    if not present:
+        return False
+    for i in present:
+        if retracted(clauses[i]):
+            continue
+        if any(competing(clauses[j]) for j in range(i + 1, len(clauses))):
+            continue
+        return True
+    return False
+
+
+def _text_is_live(needle: str, turn_text: str) -> bool:
+    anchor = re.compile(rf"(?<!\w){re.escape(needle)}(?!\w)")
+    return _has_live_mention(
+        turn_text,
+        contains=lambda c: _wordwise_contains(N.normalize_text(c), needle),
+        competing=lambda c: False,  # a competing free-text name can't be told apart safely
+        retracted=lambda c: _retracted_before(c, anchor),
+    )
+
+
+def _date_is_live(iso: str, turn_text: str, now) -> bool:
+    def contains(c):
+        return N.normalize_date(c, now) == iso or N.date_components_present(iso, c)
+
+    def competing(c):
+        other = N.normalize_date(c, now)
+        return other is not None and other != iso
+
+    return _has_live_mention(
+        turn_text, contains, competing, _clause_retracts, splitter=_PIVOT_ONLY_RE
+    )
+
+
+def _phone_is_live(value_text: str, turn_text: str) -> bool:
+    def competing(c):
+        return len(N.normalize_phone(c)) >= 7 and not N.phones_match(value_text, c)
+
+    return _has_live_mention(
+        turn_text,
+        contains=lambda c: N.phones_match(value_text, c),
+        competing=competing,
+        retracted=_clause_retracts,
+    )
+
+
+def _number_is_live(want: int, turn_text: str) -> bool:
+    anchor = re.compile(rf"\b{want}\b")
+    return _has_live_mention(
+        turn_text,
+        contains=lambda c: want in N.find_numbers(c),
+        competing=lambda c: bool(N.find_numbers(c) - {want}),
+        retracted=lambda c: _retracted_before(c, anchor),
+    )
+
+
+# --------------------------------------------------------------------------- #
 # SPOKEN
 # --------------------------------------------------------------------------- #
 
@@ -158,7 +291,7 @@ def _spoken_text(value, text, transcript, threshold, policy, turns=None) -> Grou
             continue
 
         # 1) exact phrase on word boundaries — strongest signal.
-        if _wordwise_contains(hay, needle):
+        if _wordwise_contains(hay, needle) and _text_is_live(needle, turn.text):
             return _hit(policy, value, needle, 0.99, "exact match in caller speech", turn)
 
         # 2) every token present (exact word, or fuzzy for long-enough tokens).
@@ -166,7 +299,7 @@ def _spoken_text(value, text, transcript, threshold, policy, turns=None) -> Grou
         scores = [_best_word_score(tok, words) for tok in tokens]
         if scores and all(s >= _MIN_FUZZY_TOKEN for s in scores):
             conf = sum(scores) / len(scores)
-            if conf >= threshold and conf > best_score:
+            if conf >= threshold and conf > best_score and _text_is_live(needle, turn.text):
                 best_score, best_turn = conf, turn
 
     if best_turn is not None and best_score >= threshold:
@@ -184,6 +317,8 @@ def _spoken_date(value, text, transcript, ctx) -> GroundingResult:
     if not iso:
         return _miss(Policy.SPOKEN, value, "value is not a parseable date")
     for turn in transcript.user_turns():
+        if not _date_is_live(iso, turn.text, now):
+            continue
         if N.normalize_date(turn.text, now) == iso:
             return _hit(Policy.SPOKEN, value, iso, 0.98, "date spoken by caller", turn)
         if N.date_components_present(iso, turn.text):
@@ -196,7 +331,7 @@ def _spoken_date(value, text, transcript, ctx) -> GroundingResult:
 
 def _spoken_phone(value, text, transcript) -> GroundingResult:
     for turn in transcript.user_turns():
-        if N.phones_match(text, turn.text):
+        if N.phones_match(text, turn.text) and _phone_is_live(text, turn.text):
             return _hit(
                 Policy.SPOKEN, value, N.normalize_phone(text), 0.97,
                 "phone digits spoken by caller", turn,
@@ -212,7 +347,7 @@ def _spoken_number(value, text, transcript) -> GroundingResult:
     if want is None:
         return _miss(Policy.SPOKEN, value, "value is not a clean number")
     for turn in transcript.user_turns():
-        if want in N.find_numbers(turn.text):  # whole-value match only
+        if want in N.find_numbers(turn.text) and _number_is_live(want, turn.text):
             return _hit(Policy.SPOKEN, value, want, 0.95, "number spoken by caller", turn)
     return GroundingResult(
         grounded=False, confidence=0.0, policy=Policy.SPOKEN.value, value=value,
@@ -220,7 +355,7 @@ def _spoken_number(value, text, transcript) -> GroundingResult:
     )
 
 
-def _to_number(text: str) -> Optional[int]:
+def _to_number(text: str) -> int | None:
     cleaned = re.sub(r"(?<=\d),(?=\d)", "", text)
     cleaned = cleaned.split(".")[0]  # integer part only
     digits = N.digits_only(cleaned)
@@ -272,7 +407,7 @@ def check_confirmed(value: Any, transcript: Transcript, ctx, threshold: float) -
 def _value_in_turn_text(value, text, turn_text, ctx) -> bool:
     if _looks_like_date(value, text):
         iso = N.normalize_date(text, getattr(ctx, "now", None))
-        return bool(iso) and (
+        return iso is not None and (
             N.normalize_date(turn_text, getattr(ctx, "now", None)) == iso
             or N.date_components_present(iso, turn_text)
         )
@@ -293,7 +428,7 @@ def _is_filler(text: str) -> bool:
     return all(tok in _FILLER for tok in norm.split())
 
 
-def _affirmation(text: str) -> Optional[bool]:
+def _affirmation(text: str) -> bool | None:
     norm = N.normalize_text(text)
     if not norm:
         return None
@@ -373,7 +508,9 @@ _CHECKERS = {
 }
 
 
-def check(value: Any, policy: Policy, transcript: Transcript, ctx, threshold: float) -> GroundingResult:
+def check(
+    value: Any, policy: Policy, transcript: Transcript, ctx, threshold: float
+) -> GroundingResult:
     checker = _CHECKERS.get(policy)
     if checker is None:
         raise ValueError(f"unknown policy: {policy!r}")
@@ -385,7 +522,9 @@ def check(value: Any, policy: Policy, transcript: Transcript, ctx, threshold: fl
 # --------------------------------------------------------------------------- #
 
 
-def _hit(policy: Policy, value, normalized, conf: float, reason: str, turn: Turn) -> GroundingResult:
+def _hit(
+    policy: Policy, value, normalized, conf: float, reason: str, turn: Turn
+) -> GroundingResult:
     return GroundingResult(
         grounded=True, confidence=conf, policy=policy.value, value=value,
         normalized=normalized, reason=reason, span=Span.from_turn(turn),

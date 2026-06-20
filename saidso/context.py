@@ -11,7 +11,7 @@ import contextvars
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Dict, Optional
+from typing import Any
 
 from .transcript import Transcript
 
@@ -21,37 +21,37 @@ class CallContext:
     """Everything the firewall needs to judge one call."""
 
     transcript: Transcript = field(default_factory=Transcript)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    now: Optional[date] = None
-    call_id: Optional[str] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    now: date | None = None
+    call_id: str | None = None
     ledger: Any = None  # AttestationLog | None (avoid import cycle)
     tools: Any = None  # provenance.ToolLedger | None (avoid import cycle)
 
 
-_CURRENT: contextvars.ContextVar[Optional[CallContext]] = contextvars.ContextVar(
+_CURRENT: contextvars.ContextVar[CallContext | None] = contextvars.ContextVar(
     "saidso_call_context", default=None
 )
 
 
-def get_context() -> Optional[CallContext]:
+def get_context() -> CallContext | None:
     return _CURRENT.get()
 
 
-def set_context(ctx: Optional[CallContext]) -> contextvars.Token:
+def set_context(ctx: CallContext | None) -> contextvars.Token[CallContext | None]:
     return _CURRENT.set(ctx)
 
 
-def reset_context(token: contextvars.Token) -> None:
+def reset_context(token: contextvars.Token[CallContext | None]) -> None:
     _CURRENT.reset(token)
 
 
 @contextmanager
 def call_context(
-    transcript: Optional[Transcript] = None,
+    transcript: Transcript | None = None,
     *,
-    metadata: Optional[Dict[str, Any]] = None,
-    now: Optional[date] = None,
-    call_id: Optional[str] = None,
+    metadata: dict[str, Any] | None = None,
+    now: date | None = None,
+    call_id: str | None = None,
     ledger: Any = None,
     tools: Any = None,
 ):

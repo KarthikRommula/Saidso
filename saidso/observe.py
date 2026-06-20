@@ -22,7 +22,7 @@ import logging
 import os
 import sys
 import time
-from typing import List, Optional
+from typing import Any
 
 _LOGGER_NAME = "saidso"
 
@@ -61,7 +61,7 @@ def _enable_windows_ansi() -> None:
             mode = ctypes.c_uint32()
             if kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
                 kernel32.SetConsoleMode(handle, mode.value | 0x0004)
-    except Exception:
+    except Exception:  # nosec B110 - best-effort color; never break output on failure
         pass
 
 
@@ -103,7 +103,7 @@ def enable_pretty_logging(
     level: int = logging.INFO,
     *,
     stream=None,
-    color: Optional[bool] = None,
+    color: bool | None = None,
 ) -> logging.Handler:
     """Attach a pretty colored handler to the ``saidso`` logger and return it.
 
@@ -134,7 +134,7 @@ class EventRecorder(logging.Handler):
 
     def __init__(self) -> None:
         super().__init__()
-        self.events: List[dict] = []
+        self.events: list[dict[str, Any]] = []
 
     def emit(self, record: logging.LogRecord) -> None:
         event = getattr(record, "saidso_event", None)
@@ -147,7 +147,7 @@ class EventRecorder(logging.Handler):
             "ts": record.created,
         })
 
-    def attach(self, level: int = logging.INFO) -> "EventRecorder":
+    def attach(self, level: int = logging.INFO) -> EventRecorder:
         logger = logging.getLogger(_LOGGER_NAME)
         if logger.level == logging.NOTSET or logger.level > level:
             logger.setLevel(level)
@@ -155,22 +155,22 @@ class EventRecorder(logging.Handler):
         return self
 
     @property
-    def passed(self) -> List[dict]:
+    def passed(self) -> list[dict[str, Any]]:
         return [e for e in self.events if e["event"] == "pass"]
 
     @property
-    def blocked(self) -> List[dict]:
+    def blocked(self) -> list[dict[str, Any]]:
         return [e for e in self.events if e["event"] == "block"]
 
 
-def summary(audit=None, recorder: Optional[EventRecorder] = None) -> str:
+def summary(audit=None, recorder: EventRecorder | None = None) -> str:
     """Build a plain-text summary box: counts + one row per decision.
 
     Pass an :class:`~saidso.AttestationLog` (the actions that ran) and/or an
     :class:`EventRecorder` (the full pass/block stream). With only an audit log you
     see passes; add a recorder to also see what was blocked.
     """
-    rows: List[str] = []
+    rows: list[str] = []
     n_pass = n_block = 0
 
     if recorder is not None:

@@ -6,7 +6,7 @@ import json
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Any
 
 from .result import ArgFinding
 
@@ -17,10 +17,10 @@ class Attestation:
 
     action: str
     ts: float
-    call_id: Optional[str]
-    args: List[ArgFinding] = field(default_factory=list)
+    call_id: str | None
+    args: list[ArgFinding] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "action": self.action,
             "ts": self.ts,
@@ -45,9 +45,9 @@ class AttestationLog:
     memory and reachable via :attr:`records`.
     """
 
-    def __init__(self, path: Optional[str] = None) -> None:
+    def __init__(self, path: str | None = None) -> None:
         self.path = path
-        self._records: List[Attestation] = []
+        self._records: list[Attestation] = []
         self._lock = threading.Lock()
 
     def record(self, attestation: Attestation) -> Attestation:
@@ -58,17 +58,19 @@ class AttestationLog:
                     fh.write(json.dumps(attestation.to_dict()) + "\n")
         return attestation
 
-    def build(self, action: str, findings: List[ArgFinding], call_id: Optional[str] = None) -> Attestation:
+    def build(
+        self, action: str, findings: list[ArgFinding], call_id: str | None = None
+    ) -> Attestation:
         return self.record(
             Attestation(action=action, ts=time.time(), call_id=call_id, args=list(findings))
         )
 
     @property
-    def records(self) -> List[Attestation]:
+    def records(self) -> list[Attestation]:
         return list(self._records)
 
     def __len__(self) -> int:
         return len(self._records)
 
-    def export(self) -> List[dict]:
+    def export(self) -> list[dict[str, Any]]:
         return [a.to_dict() for a in self._records]

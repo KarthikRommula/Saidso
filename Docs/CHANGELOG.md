@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.4
+
+Correction-aware grounding + production hardening.
+
+### New
+- **Supersession/retraction guard** in the `SPOKEN` matcher. A value the caller
+  explicitly took back is no longer grounded from that retracted mention:
+  - retraction cues before a value — "my **old** number was 555-1234", "my name
+    is **not** John", "**instead of** X" — drop that value;
+  - a correction pivot ("but", "i mean", "no wait", …) followed by a competing
+    value of the same kind supersedes the earlier one.
+  It only ever *removes* false grounds (fail-closed: when unsure it re-asks), and
+  remains deterministic — a heuristic for common self-corrections, not a semantic
+  intent model. Dates are split on pivots only, so "January first, nineteen
+  ninety" is never fragmented by its comma.
+
+### Hardened
+- **Security:** `saidso docs <topic>` now resolves only against the known topic
+  list (closes a path-traversal vector). Clean `bandit` and `pip-audit` runs.
+- **Quality gates:** added `ruff`, `mypy`, `bandit`, `pip-audit`, and
+  `pytest-cov` (≥90% gate) — all configured in `pyproject.toml` and green.
+  Source modernized to PEP 585/604 typing; public API type-checks cleanly.
+- Promoted to Beta.
+
 ## 0.4.3
 
 In-terminal documentation.

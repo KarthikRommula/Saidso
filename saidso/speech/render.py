@@ -27,7 +27,7 @@ from __future__ import annotations
 import logging
 import string
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 from ..context import get_context
 from ..provenance import FromTool, from_tool, reconcile
@@ -41,14 +41,14 @@ class Fact:
 
     value: Any
     spec: FromTool
-    render: Optional[Callable[[Any], str]] = None
+    render: Callable[[Any], str] | None = None
 
 
 def fact(
     value: Any,
     *sources,
     normalize: str = "exact",
-    render: Optional[Callable[[Any], str]] = None,
+    render: Callable[[Any], str] | None = None,
     allow_single_candidate: bool = False,
 ) -> Fact:
     """Declare a spoken fact and where it must come from.
@@ -88,15 +88,15 @@ class UngroundedSpeech(Exception):
     point is fail-closed: rather than speak a possibly-fabricated value, speak nothing.
     """
 
-    def __init__(self, blocked: List[BlockedFact]) -> None:
+    def __init__(self, blocked: list[BlockedFact]) -> None:
         self.blocked = blocked
         names = ", ".join(b.name for b in blocked) or "(none)"
         super().__init__(f"refusing to speak ungrounded fact(s): {names}")
 
 
-def _field_names(template: str) -> List[str]:
+def _field_names(template: str) -> list[str]:
     """The simple ``{name}`` placeholders in ``template`` (rejects ``{a.b}`` / ``{0}``)."""
-    names: List[str] = []
+    names: list[str] = []
     for _, field, _, _ in string.Formatter().parse(template):
         if field is None:
             continue
@@ -130,13 +130,13 @@ def render_spoken(template: str, *, ledger: Any = None, **facts: Fact) -> str:
     if unused:
         raise ValueError(f"facts not referenced by the template: {unused}")
 
-    rendered: Dict[str, str] = {}
-    blocked: List[BlockedFact] = []
+    rendered: dict[str, str] = {}
+    blocked: list[BlockedFact] = []
     for name in fields:
         f = facts[name]
         if not isinstance(f, Fact):
             raise TypeError(f"{name!r} must be a fact(...), got {type(f).__name__}")
-        cands: List[Any] = []
+        cands: list[Any] = []
         if ledger is not None:
             for tool, key in f.spec.sources:
                 cands.extend(ledger.candidates(tool, key))
@@ -171,7 +171,7 @@ def render_spoken(template: str, *, ledger: Any = None, **facts: Fact) -> str:
     return out
 
 
-def try_render_spoken(template: str, *, ledger: Any = None, **facts: Fact) -> Optional[str]:
+def try_render_spoken(template: str, *, ledger: Any = None, **facts: Fact) -> str | None:
     """Like :func:`render_spoken`, but return ``None`` instead of raising on a block.
 
     Convenient for "speak the deterministic line if every fact is grounded, otherwise

@@ -21,7 +21,7 @@ import functools
 import inspect
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable
 
 from ._matching import matcher
 from .context import CallContext, get_context
@@ -37,7 +37,7 @@ _OVERRIDE_KEYS = ("_context", "_transcript")
 class GroundingConfig:
     """Tunables for the firewall."""
 
-    thresholds: Optional[Dict[Policy, float]] = None
+    thresholds: dict[Policy, float] | None = None
     raise_on_block: bool = False  # default: return SteerBack (slots into tool loops)
     warn_on_missing_context: bool = True
 
@@ -56,9 +56,9 @@ class GroundingBlocked(Exception):
 
 
 def grounded(
-    _config: Optional[GroundingConfig] = None,
-    **arg_policies: Union[Policy, str],
-) -> Callable:
+    _config: GroundingConfig | None = None,
+    **arg_policies: Policy | str,
+) -> Callable[..., Any]:
     """Decorator factory. Map argument names to :class:`Policy` values.
 
     Example::
@@ -69,7 +69,7 @@ def grounded(
     config = _config or GroundingConfig()
     if not arg_policies:
         raise ValueError("@grounded requires at least one argument policy")
-    policies: Dict[str, Policy] = {}
+    policies: dict[str, Policy] = {}
     for name, value in arg_policies.items():
         try:
             policies[name] = value if isinstance(value, Policy) else Policy(value)
@@ -78,7 +78,7 @@ def grounded(
                 f"@grounded: unknown policy {value!r} for argument {name!r}"
             ) from exc
 
-    def decorate(fn: Callable) -> Callable:
+    def decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
         sig = inspect.signature(fn)
         params = sig.parameters
         var_kw_name = next(
@@ -129,8 +129,8 @@ def grounded(
                     return bound.arguments[var_kw_name].get(arg_name)
                 return None
 
-            failed: List[ArgFinding] = []
-            passed: List[ArgFinding] = []
+            failed: list[ArgFinding] = []
+            passed: list[ArgFinding] = []
             for name, policy in policies.items():
                 value = resolve(name)
                 try:
@@ -179,7 +179,8 @@ def grounded(
                     return outcome
                 return await fn(*outcome.args, **outcome.kwargs)
 
-            awrapper.__grounded_policies__ = policies
+            # Expose the policy map for introspection (e.g. the test harness).
+            awrapper.__grounded_policies__ = policies  # type: ignore[attr-defined]
             return awrapper
 
         @functools.wraps(fn)
@@ -191,7 +192,7 @@ def grounded(
                 return outcome
             return fn(*outcome.args, **outcome.kwargs)
 
-        swrapper.__grounded_policies__ = policies
+        swrapper.__grounded_policies__ = policies  # type: ignore[attr-defined]
         return swrapper
 
     return decorate
@@ -201,5 +202,5 @@ def grounded(
 class _Pass:
     """Internal: the (possibly override-stripped) args to forward to the body."""
 
-    args: tuple
-    kwargs: dict
+    args: tuple[Any, ...]
+    kwargs: dict[str, Any]

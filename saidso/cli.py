@@ -10,11 +10,10 @@ small: report the version, and scaffold a runnable quickstart you can explore.
 from __future__ import annotations
 
 import argparse
-import subprocess
+import subprocess  # nosec B404 - only used for the fixed `pip install --upgrade` argv
 import sys
 from importlib import resources
 from pathlib import Path
-from typing import List, Optional
 
 from . import __version__
 from .observe import _enable_windows_ansi, _supports_color
@@ -24,9 +23,9 @@ _DOCS = "_docs"
 _DEFAULT_TOPIC = "overview"
 
 
-def _write_templates(dest: Path) -> List[str]:
+def _write_templates(dest: Path) -> list[str]:
     """Copy every bundled template into ``dest``; return the filenames written."""
-    written: List[str] = []
+    written: list[str] = []
     pkg_files = resources.files(__package__) / _TEMPLATES
     for entry in sorted(pkg_files.iterdir(), key=lambda e: e.name):
         if entry.name.startswith("_") or not entry.is_file():
@@ -54,7 +53,7 @@ def _docs_dir():
     return resources.files(__package__) / _DOCS
 
 
-def _doc_topics() -> List[str]:
+def _doc_topics() -> list[str]:
     return sorted(
         e.name[:-3] for e in _docs_dir().iterdir() if e.name.endswith(".md")
     )
@@ -65,7 +64,7 @@ def _render_markdown(text: str, color: bool) -> str:
     if not color:
         return text
     bold, cyan, reset = "\033[1m", "\033[36m", "\033[0m"
-    out: List[str] = []
+    out: list[str] = []
     for line in text.splitlines():
         if line.startswith("# "):
             out.append(f"{bold}{cyan}{line[2:]}{reset}")
@@ -86,11 +85,13 @@ def _cmd_docs(args: argparse.Namespace) -> int:
             print(f"  saidso docs {t}")
         return 0
     topic = args.topic or _DEFAULT_TOPIC
-    page = _docs_dir() / f"{topic}.md"
-    if not page.is_file():
+    # Resolve against the known topic list only — never build a path from raw
+    # user input (guards against `saidso docs ../../something` traversal).
+    if topic not in topics:
         print(f"saidso: no docs topic {topic!r}", file=sys.stderr)
         print("available: " + ", ".join(topics), file=sys.stderr)
         return 1
+    page = _docs_dir() / f"{topic}.md"
     color = _supports_color(sys.stdout)
     if color:
         _enable_windows_ansi()
@@ -111,7 +112,8 @@ def _cmd_upgrade(_args: argparse.Namespace) -> int:
     cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "saidso"]
     print("$ " + " ".join(cmd))
     try:
-        return subprocess.call(cmd)
+        # Fixed argv (no shell, no user input) — safe by construction.
+        return subprocess.call(cmd)  # nosec B603
     except OSError as exc:  # pip not available in this environment
         print(
             f"saidso: could not run pip ({exc}). Upgrade manually with "
@@ -151,13 +153,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not getattr(args, "command", None):
         parser.print_help()
         return 0
-    return args.func(args)
+    return int(args.func(args))
 
 
 if __name__ == "__main__":

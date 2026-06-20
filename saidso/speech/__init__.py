@@ -28,14 +28,14 @@ from .render import (
 )
 
 __all__ = [
+    "BlockedFact",
+    "Fact",
+    "SpokenName",
+    "UngroundedSpeech",
+    "check_spoken_names",
+    "fact",
+    "find_name_mentions",
+    "find_ungrounded_names",
     "render_spoken",
     "try_render_spoken",
-    "fact",
-    "Fact",
-    "UngroundedSpeech",
-    "BlockedFact",
-    "find_ungrounded_names",
-    "check_spoken_names",
-    "find_name_mentions",
-    "SpokenName",
 ]

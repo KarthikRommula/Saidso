@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -15,7 +15,7 @@ class Span:
     speaker: str
     text: str
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "turn_id": self.turn_id,
             "ts": self.ts,
@@ -24,7 +24,7 @@ class Span:
         }
 
     @classmethod
-    def from_turn(cls, turn) -> "Span":
+    def from_turn(cls, turn) -> Span:
         return cls(turn_id=turn.id, ts=turn.ts, speaker=turn.speaker, text=turn.text)
 
 
@@ -38,9 +38,9 @@ class GroundingResult:
     value: Any
     reason: str = ""
     normalized: Any = None
-    span: Optional[Span] = None
+    span: Span | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "grounded": self.grounded,
             "confidence": round(self.confidence, 4),
@@ -59,7 +59,7 @@ class ArgFinding:
     name: str
     result: GroundingResult
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {"arg": self.name, **self.result.to_dict()}
 
 
@@ -95,8 +95,8 @@ class SteerBack:
 
     action: str
     blocked: bool = True
-    failed: List[ArgFinding] = field(default_factory=list)
-    grounded: List[ArgFinding] = field(default_factory=list)
+    failed: list[ArgFinding] = field(default_factory=list)
+    grounded: list[ArgFinding] = field(default_factory=list)
     message: str = ""
 
     def __post_init__(self) -> None:
@@ -121,7 +121,7 @@ class SteerBack:
 
     # -- adapters -------------------------------------------------------- #
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "action": self.action,
             "blocked": self.blocked,

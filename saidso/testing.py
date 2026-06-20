@@ -17,7 +17,7 @@ Example::
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from .attestation import AttestationLog
 from .context import call_context
@@ -34,8 +34,8 @@ class GroundingCase:
         self,
         tool,
         *,
-        metadata: Optional[Dict[str, Any]] = None,
-        now: Optional[date] = None,
+        metadata: dict[str, Any] | None = None,
+        now: date | None = None,
     ) -> None:
         self._tool = tool
         self._tr = Transcript()
@@ -47,21 +47,21 @@ class GroundingCase:
 
     # -- build the conversation ------------------------------------------ #
 
-    def user(self, text: str) -> "GroundingCase":
+    def user(self, text: str) -> GroundingCase:
         self._tr.add_user(text)
         return self
 
-    def agent(self, text: str) -> "GroundingCase":
+    def agent(self, text: str) -> GroundingCase:
         self._tr.add_agent(text)
         return self
 
-    def caller_id(self, value: str) -> "GroundingCase":
+    def caller_id(self, value: str) -> GroundingCase:
         self._metadata["caller_id"] = value
         return self
 
     # -- invoke ---------------------------------------------------------- #
 
-    def call(self, **kwargs) -> "GroundingCase":
+    def call(self, **kwargs) -> GroundingCase:
         """Invoke the guarded tool with the built context (sync tools only)."""
         with call_context(
             self._tr, metadata=self._metadata, now=self._now,
@@ -84,10 +84,10 @@ class GroundingCase:
         return isinstance(self._result, SteerBack)
 
     @property
-    def attestations(self) -> List[dict]:
+    def attestations(self) -> list[dict[str, Any]]:
         return self._log.export()
 
-    def assert_blocked(self, *expected_args: str) -> "GroundingCase":
+    def assert_blocked(self, *expected_args: str) -> GroundingCase:
         self._require_ran()
         if not self.blocked:
             raise AssertionError(
@@ -103,7 +103,7 @@ class GroundingCase:
                 )
         return self
 
-    def assert_grounded(self, expected_return: Any = _NO_EXPECTED) -> "GroundingCase":
+    def assert_grounded(self, expected_return: Any = _NO_EXPECTED) -> GroundingCase:
         self._require_ran()
         if self.blocked:
             raise AssertionError(
@@ -121,7 +121,7 @@ class GroundingCase:
             raise RuntimeError("call(...) the tool before asserting")
 
 
-def replay(tool, turns: List[Tuple[str, str]], call_kwargs: Dict[str, Any], **ctx_kwargs):
+def replay(tool, turns: list[tuple[str, str]], call_kwargs: dict[str, Any], **ctx_kwargs):
     """One-shot helper: build from ``(speaker, text)`` turns, call, return case."""
     case = GroundingCase(tool, **ctx_kwargs)
     for speaker, text in turns:

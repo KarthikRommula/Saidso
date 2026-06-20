@@ -16,8 +16,8 @@ only reduces the residual "purely-spoken wrong name" gap.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence
 
 from .._matching import normalize as N
 from .._matching.fuzz import ratio
@@ -37,7 +37,7 @@ class SpokenName:
     score: float = 0.0
 
 
-def find_name_mentions(spoken: str, titles: Sequence[str] = _DEFAULT_TITLES) -> List[str]:
+def find_name_mentions(spoken: str, titles: Sequence[str] = _DEFAULT_TITLES) -> list[str]:
     """Extract names spoken right after an honorific (Dr / Doctor / Prof ...)."""
     if not spoken:
         return []
@@ -48,8 +48,8 @@ def find_name_mentions(spoken: str, titles: Sequence[str] = _DEFAULT_TITLES) -> 
     return [m.group(1).strip() for m in pat.finditer(spoken)]
 
 
-def _allowed_tokens(allowed: Iterable[str]) -> set:
-    toks = set()
+def _allowed_tokens(allowed: Iterable[str]) -> set[str]:
+    toks: set[str] = set()
     for a in allowed:
         for t in N.normalize_text(a).split():
             if t:
@@ -63,7 +63,7 @@ def check_spoken_names(
     *,
     titles: Sequence[str] = _DEFAULT_TITLES,
     threshold: float = _FUZZY,
-) -> List[SpokenName]:
+) -> list[SpokenName]:
     """Judge each titled name in ``spoken`` against the ``allowed`` ground-truth names.
 
     Grounding is decided on the surname (last token of the mention): an exact
@@ -71,7 +71,7 @@ def check_spoken_names(
     """
     allowed = list(allowed)
     tokens = _allowed_tokens(allowed)
-    out: List[SpokenName] = []
+    out: list[SpokenName] = []
     for raw in find_name_mentions(spoken, titles):
         ntoks = N.normalize_text(raw).split()
         surname = ntoks[-1] if ntoks else ""
@@ -98,7 +98,7 @@ def find_ungrounded_names(
     *,
     titles: Sequence[str] = _DEFAULT_TITLES,
     threshold: float = _FUZZY,
-) -> List[SpokenName]:
+) -> list[SpokenName]:
     """Convenience: just the ungrounded titled-name mentions in ``spoken``."""
     return [
         m for m in check_spoken_names(spoken, allowed, titles=titles, threshold=threshold)
