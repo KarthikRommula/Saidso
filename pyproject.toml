@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "saidso"
-version = "0.4.2"
+version = "0.4.3"
 description = "A grounding firewall for action-taking AI agents: refuse any tool argument the user never actually said, with a transcript-linked audit trail."
 readme = "README.md"
 requires-python = ">=3.9"
