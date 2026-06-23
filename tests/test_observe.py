@@ -17,7 +17,6 @@ from saidso import (
 from saidso.observe import PrettyFormatter, _supports_color
 from saidso.result import ArgFinding, GroundingResult
 
-
 # --------------------------------------------------------------------------- #
 # PrettyFormatter
 # --------------------------------------------------------------------------- #

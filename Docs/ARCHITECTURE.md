@@ -159,8 +159,8 @@ not a pass. A broken metal detector locks the door.
 **Deterministic and fast.** Pure Python, in-process. A write check is ~12 µs —
 roughly 1/2000th of a single backend round-trip.
 
-**Zero required dependencies.** `rapidfuzz` is used when installed
-(`pip install saidso[fast]`); stdlib `difflib` is the fallback. Ships `py.typed`.
+**Zero required dependencies.** `rapidfuzz` is used when installed; stdlib
+`difflib` is the fallback. Ships `py.typed`.
 
 **Model- and platform-agnostic.** No model SDK is imported. saidso operates on
 text, function arguments, and recorded tool outputs — primitives every stack exposes.

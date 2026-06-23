@@ -29,7 +29,6 @@ from saidso._matching.matcher import Policy, _is_number, check, to_text
 from saidso.result import ArgFinding, GroundingResult, Span
 from saidso.testing import GroundingCase, replay
 
-
 # --------------------------------------------------------------------------- #
 # Transcript — full API surface
 # --------------------------------------------------------------------------- #
