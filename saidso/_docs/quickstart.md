@@ -3,7 +3,6 @@
 ## Install
 
   pip install saidso          # zero required dependencies
-  pip install saidso[fast]    # optional rapidfuzz for faster matching
 
 ## Scaffold a runnable example
 

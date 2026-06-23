@@ -127,5 +127,5 @@ constraint automatically from function signatures.
 A grounding firewall must be deployable everywhere an agent runs. Adding a
 required C extension (like `rapidfuzz`) would break pure-Python and
 restricted-environment deployments. The `difflib` fallback is ~10% slower on
-fuzzy matching but produces identical verdicts. Install `saidso[fast]` to
-get `rapidfuzz` when throughput matters.
+fuzzy matching but produces identical verdicts. Install `rapidfuzz` yourself
+when throughput matters.

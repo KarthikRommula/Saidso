@@ -176,12 +176,18 @@ def test_docs_renders_with_color(monkeypatch, capsys):
 
 
 def test_upgrade_reports_when_pip_missing(monkeypatch, capsys):
-    monkeypatch.setattr("saidso.cli.subprocess.Popen", lambda *a, **k: (_ for _ in ()).throw(OSError("no pip")))
+    def _no_pip(*a, **k):
+        raise OSError("no pip")
+
+    monkeypatch.setattr("saidso.cli.subprocess.Popen", _no_pip)
     assert main(["upgrade"]) == 1
     assert "could not run pip" in capsys.readouterr().err
 
 
 def test_uninstall_reports_when_pip_missing(monkeypatch, capsys):
-    monkeypatch.setattr("saidso.cli.subprocess.Popen", lambda *a, **k: (_ for _ in ()).throw(OSError("no pip")))
+    def _no_pip(*a, **k):
+        raise OSError("no pip")
+
+    monkeypatch.setattr("saidso.cli.subprocess.Popen", _no_pip)
     assert main(["uninstall"]) == 1
     assert "could not run pip" in capsys.readouterr().err

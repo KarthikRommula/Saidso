@@ -17,8 +17,7 @@
 The name is the whole idea: an action only goes through if the user *said so*.
 
 ```bash
-pip install saidso          # zero required dependencies
-pip install saidso[fast]    # optional: rapidfuzz for faster matching
+pip install saidso
 ```
 
 ---

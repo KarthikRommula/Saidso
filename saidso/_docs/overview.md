@@ -29,7 +29,7 @@ WILL hallucinate — it just refuses to let the hallucination matter.
 
 - Fail-closed: a check that errors blocks; it never opens the gate.
 - Deterministic & fast: pure Python, in-process, ~12us per write check.
-- Zero required dependencies (rapidfuzz optional).
+- Zero required dependencies.
 - Model- & platform-agnostic: no model SDK is imported anywhere.
 
 ## Next
