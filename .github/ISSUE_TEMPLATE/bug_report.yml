@@ -1,0 +1,56 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug — what did saidso do that it shouldn't have, or fail to do?
+      placeholder: "@grounded blocked a value that was clearly present in the caller's transcript."
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: What should have happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproducer
+    attributes:
+      label: Minimal reproducer
+      description: The shortest code that reproduces the bug. Include the transcript, the decorated function, and the call.
+      render: python
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: saidso version
+      placeholder: "0.5.1  (run: saidso version)"
+    validations:
+      required: true
+
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      placeholder: "3.12"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rapidfuzz
+    attributes:
+      label: rapidfuzz installed?
+      description: "pip show rapidfuzz"
+      options:
+        - "Yes (saidso[fast])"
+        - "No (stdlib difflib fallback)"
+    validations:
+      required: true

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dev dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: python -m ruff check saidso tests
+
+      - name: Type check
+        run: python -m mypy saidso
+
+      - name: Security lint
+        run: python -m bandit -r saidso -c pyproject.toml -q
+
+      - name: Tests
+        run: python -m pytest -q

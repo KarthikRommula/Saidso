@@ -1,72 +1,131 @@
-# saidso — design
+# Design notes
 
-## The one primitive
+Internal design rationale for contributors. For the public API reference see
+[ARCHITECTURE.md](ARCHITECTURE.md).
 
-A checkpoint between an agent's "call `f(args)`" and the code that runs `f`. It
-refuses the call unless every guarded argument traces back to the transcript,
-and it keeps a receipt for the ones that pass.
+---
 
-Everything else is packaging around that.
+## The core primitive
 
-## Module map
+A checkpoint between an agent's "call `f(args)`" and the code that actually
+runs `f`. The checkpoint refuses the call unless every guarded argument traces
+back to the transcript or the tool ledger. Every argument that passes gets a
+receipt.
 
-| Module | Responsibility |
-|---|---|
-| `transcript.py` | Append-only, timestamped buffer of `Turn`s (user/agent/system). |
-| `normalize.py` | Deterministic normalization: number words, years, dates, phones, text. The make-or-break layer. |
-| `_fuzz.py` | Fuzzy match with `rapidfuzz` when present, `difflib` fallback. Zero required deps. |
-| `matcher.py` | Per-policy checkers (`SPOKEN`/`CONFIRMED`/`CALLER_ID`/`INFERABLE`) → `GroundingResult` + span. |
-| `policy.py` | `Policy` enum + default thresholds. |
-| `result.py` | `Span`, `GroundingResult`, `ArgFinding`, `SteerBack` (the block-and-steer contract). |
-| `context.py` | `CallContext` + `contextvars` so the decorator reads transcript/metadata implicitly. |
-| `attestation.py` | `Attestation` + `AttestationLog` (in-memory + optional JSONL). |
-| `grounding.py` | The `@grounded` decorator: bind args → check → block or run + attest. |
+Everything else in the library is packaging around that single primitive.
+
+---
 
 ## Control flow of a guarded call
 
 ```
 call f(name=..., dob=...)
-   │  (decorator) bind args to names via inspect.signature
-   │  resolve CallContext (explicit override > contextvar > empty)
+   │
+   │  decorator: bind args via inspect.signature
+   │  resolve CallContext (explicit > contextvar > empty)
    ▼
-for each guarded arg: matcher.check(value, policy, transcript, ctx)
+for each guarded arg:
+   matcher.check(value, policy, transcript, ctx) → GroundingResult
    │
-   ├─ any ungrounded ─► build SteerBack(failed, grounded) ─► return it
-   │                    (or raise GroundingBlocked if configured)
+   ├─ any ungrounded ──► SteerBack(failed=[...], grounded=[...])
+   │                     returned to caller; body never runs
+   │                     (or GroundingBlocked raised if configured)
    │
-   └─ all grounded ──► ledger.build(action, findings) ─► run f(...) ─► return
+   └─ all grounded ────► rewrite each arg to its canonical value
+                         run f(canonical_args)
+                         write Attestation to ledger
+                         return result
 ```
 
-## Why deterministic-first
+`@grounded_outputs` follows the same shape but runs `reconcile()` against the
+`ToolLedger` instead of the transcript.
 
-The realtime voice loop has a hard latency ceiling. So matching is:
+---
 
-1. **Normalize** the value and the transcript to the same shape (digits, ISO
-   dates, lowercased text).
-2. **Exact** (normalized substring) → high confidence.
-3. **Fuzzy** (`partial_ratio` ≥ threshold) → medium confidence, with the
-   matched turn as the span.
+## Matching strategy
 
-A verifier-model escalation for genuinely ambiguous cases is a roadmap hook,
-not on the hot path.
+The realtime voice loop has a hard latency ceiling, so matching is deterministic
+and staged — no model call on the hot path.
 
-### Dates specifically
+**Step 1 — normalize.** Both the argument value and every transcript turn are
+passed through the same normalizer (number-words → digits, ISO dates, E.164
+phones, lowercase). This is the make-or-break layer: most false blocks in
+production trace to missing normalization coverage, not wrong thresholds.
 
-Full date parsing of free speech is brittle, so `SPOKEN` for a date passes if
-**either** the whole turn parses to the same ISO date **or** all three
-components (year, month, day — in digit *or* spoken form) appear in one turn
-(`date_components_present`). The component check is the robust workhorse.
+**Step 2 — exact substring.** The normalized value is searched as a substring
+of the normalized turn text. On a hit the confidence is 1.0.
+
+**Step 3 — fuzzy.** `partial_ratio` (via `rapidfuzz` or `difflib`) against each
+turn. Confidence equals the normalized score. Passes if ≥ the policy threshold.
+
+Thresholds are tunable per argument via `Policy.SPOKEN(threshold=0.85)` or
+globally via `GroundingConfig`.
+
+### Date matching
+
+Full date parsing of free speech is brittle. `SPOKEN` for a date passes if
+**either** the full turn parses to the same ISO date **or** all three components
+(year, month, day — digit or spoken form) appear within a single turn. The
+component check is the robust workhorse; the full-parse path is a fast exit for
+clean input.
+
+---
+
+## The steer-back contract
+
+A block is not an error — it is an expected, recoverable state. The `SteerBack`
+return value carries:
+
+- `failed` — the argument names that did not ground.
+- `grounded` — the argument names that did.
+- `message` — a caller-facing re-ask the agent can speak verbatim.
+
+`raise_on_block=True` switches to exception mode for callers that prefer it.
+`steer_style="spoken"` generates a natural-language re-ask free of technical
+jargon, suitable for direct TTS.
+
+---
+
+## Shadow mode
+
+`GroundingConfig(enforce=False)` records every would-block to the
+`AttestationLog` with `status="shadow_block"` without actually blocking the
+call. Use this to calibrate policy thresholds on real traffic before enforcing.
+The shadow log has the same schema as a live log; analysis tooling works on
+both.
+
+---
 
 ## The trust trade-off
 
-This is a **hard firewall**: it can block a legitimate action if the matcher
-fails to recognize a real value (a false positive). That is the central risk
-and the thing to measure. Thresholds are tunable per policy via
-`GroundingConfig`. The steer-back design softens the cost: a wrong block just
-makes the agent re-ask, rather than crashing the call.
+saidso is a **hard firewall**. It can block a legitimate action if the matcher
+fails to recognize a value that is genuinely present in the transcript (a false
+block). That is the central operational risk.
 
-## Anti-priming (why example values are absent)
+The steer-back design bounds the cost: a false block makes the agent re-ask once,
+rather than failing the call. Thresholds and normalizers let operators tune
+precision/recall per deployment.
+
+The alternative — only blocking obvious hallucinations while letting ambiguous
+cases through — is not a safe default for a library whose job is to prevent
+committed fabrications. The default posture is strict; operators loosen it
+deliberately with evidence.
+
+---
+
+## Anti-priming
 
 Tool descriptions and guard prompts deliberately never contain a placeholder
-"bad" value (e.g. a sample DOB). Putting an example value in the prompt teaches
-the model to emit it. The future prompt compiler enforces this automatically.
+"bad" value (e.g. a sample DOB). Placing an example value in the prompt teaches
+the model to emit it. The ROADMAP item for a prompt compiler enforces this
+constraint automatically from function signatures.
+
+---
+
+## Why zero required dependencies
+
+A grounding firewall must be deployable everywhere an agent runs. Adding a
+required C extension (like `rapidfuzz`) would break pure-Python and
+restricted-environment deployments. The `difflib` fallback is ~10% slower on
+fuzzy matching but produces identical verdicts. Install `saidso[fast]` to
+get `rapidfuzz` when throughput matters.

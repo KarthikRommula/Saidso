@@ -1,47 +1,63 @@
-# saidso — roadmap
+# Roadmap
 
-The MVP is deliberately small and deterministic. These are the pieces that turn
-it from a useful decorator into a category-defining tool.
+The core library is deliberately small and deterministic. These are the pieces
+that turn it from a useful decorator into a category-defining tool.
+
+---
 
 ## 1. Verifier-model escalation
-When deterministic matching lands in the ambiguous band (near the threshold),
-escalate that single argument to a tiny, fast model: "Did the caller say X?
-Quote the words." Keep it off the hot path; cache per-turn. Pluggable backend.
+
+When deterministic matching lands in the ambiguous band (near the confidence
+threshold), escalate that single argument to a small, fast model: "Did the
+caller say X? Quote the words." Keep it off the hot path; cache the verdict
+per transcript turn. The interface is pluggable — any model that returns a
+structured yes/no with a quoted span qualifies.
 
 ## 2. Anti-priming prompt compiler
-Generate tool descriptions and guard prompts that enforce fidelity **without
-ever naming a bad example value** (example values teach the model to emit them).
-Input: the function signature + policies. Output: a description block + system
-guidance. This is a hard-won, little-known lesson baked into a generator.
 
-## 3. Hallucination regression harness
-A pytest-style harness: replay real or synthetic transcripts against guarded
-tools and assert **zero ungrounded commits** slipped through. Turns "we hope it
-doesn't fabricate" into a CI gate. Ships with a corpus format and fixtures.
+Generate tool descriptions and system prompts that enforce fidelity **without
+ever naming a placeholder example value** (example values teach the model to
+emit them). Input: a function signature plus its `@grounded` policies. Output:
+a description block and system guidance. This is a hard-won, little-known
+lesson from production voice deployments, baked into a generator.
+
+## 3. Matcher precision/recall eval set
+
+A labeled dataset of `(transcript, argument_value, expected_verdict)` triples
+covering accents, ASR noise, spelled-out emails, partial confirmations, and
+correction flows. Publish precision/recall by policy and normalization type.
+**This is what determines whether a team keeps the firewall enabled.** Build
+and publish this before any broad launch.
 
 ## 4. First-class framework adapters
-- **LiveKit** (priority — home turf): transcription events → `Transcript`,
-  auto `call_context` per session.
+
+- **LiveKit Agents** (priority): transcription events → `Transcript`, automatic
+  `call_context` per session.
 - **Pipecat**, **Vapi**, **LangGraph** tool nodes.
-Keep each adapter thin; the core stays framework-neutral.
 
-## 5. Matcher precision/recall eval set
-A brutal labeled set of (transcript, value, expected verdict) — accents, ASR
-noise, spelled-out emails, partial confirmations. Publish precision/recall.
-**This is what determines whether anyone keeps the firewall on.** Build it
-before the launch tweet.
+Each adapter must be thin — a few dozen lines that bridge the framework's
+event model to saidso's `Transcript` and `call_context`. The core stays
+framework-neutral.
 
-## 6. Richer policies
-- `Policy.SPOKEN(type=...)` explicit type hints (date/phone/email/name).
-- `Policy.ONE_OF([...])` for enum-ish slots.
-- Composable policies (`SPOKEN | CONFIRMED`).
-- `email` normalization ("m as in mango, a, r, i, a, at gmail dot com").
+## 5. Richer policies
 
-## 7. Provenance ledger as a product surface
-Exportable, signed attestation bundles ("authorized by these words at 00:42")
-for healthcare/finance/legal audit. The likely paid layer on top of the OSS
+- `Policy.SPOKEN(type="date" | "phone" | "email" | "name")` — explicit type
+  hints that select the right normalizer automatically.
+- `Policy.ONE_OF([...])` — enum-style slots (e.g. a department name chosen
+  from a known list).
+- Composable policies: `SPOKEN | CONFIRMED` for high-stakes arguments.
+- `normalize="email"` to handle spelled-out addresses:
+  "m as in mango, a, r, i, a, at gmail dot com" → "maria@gmail.com".
+
+## 6. Exportable, signed attestation bundles
+
+Per-call attestation packages — a signed, self-contained record of "this action
+was authorized by these caller words at this timestamp" — suitable for
+healthcare, finance, and legal audit. The natural paid layer on top of the OSS
 core.
 
-## 8. Observability
-Per-call metrics: block rate, false-block feedback loop, latency budget, policy
-hit rates. A dashboard is downstream of this.
+## 7. Per-call observability metrics
+
+Block rate, false-block feedback loop, latency budget, and policy hit rates
+exposed as structured telemetry (OpenTelemetry spans or a simple JSON summary).
+A dashboard is downstream of this; the metrics schema comes first.

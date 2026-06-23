@@ -1,5 +1,11 @@
 # saidso
 
+[![PyPI](https://img.shields.io/pypi/v/saidso.svg)](https://pypi.org/project/saidso/)
+[![CI](https://github.com/KarthikRommula/saidso/actions/workflows/ci.yml/badge.svg)](https://github.com/KarthikRommula/saidso/actions/workflows/ci.yml)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Zero dependencies](https://img.shields.io/badge/dependencies-zero-brightgreen.svg)](pyproject.toml)
+
 **A grounding firewall for action-taking AI agents.**
 
 `saidso` sits between an AI agent and its consequences and enforces one rule:
@@ -193,10 +199,13 @@ python -m saidso version    # module form also works
 
 ## Examples & docs
 
-- [`examples/quickstart.py`](examples/quickstart.py) — writes, reads, and observability in one file.
-- [`examples/openai_tooluse.py`](examples/openai_tooluse.py) — raw OpenAI tool-use adapter.
-- [`examples/livekit_adapter.py`](examples/livekit_adapter.py) — realtime voice adapter.
-- [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md) — package layout + full vocabulary reference.
+| File | What it shows |
+|---|---|
+| [`examples/john_doe_demo.py`](examples/john_doe_demo.py) | The core problem: naked agent vs. firewalled agent, side by side |
+| [`examples/quickstart.py`](examples/quickstart.py) | Writes, provenance, reads, and observability in one file |
+| [`examples/openai_tooluse.py`](examples/openai_tooluse.py) | Wiring saidso into an OpenAI-style tool-use loop |
+| [`Docs/ARCHITECTURE.md`](Docs/ARCHITECTURE.md) | Full API reference — decorators, policies, types, observability |
+| [`Docs/DESIGN.md`](Docs/DESIGN.md) | Internal design rationale and matching strategy |
 
 ## Development
 
@@ -209,6 +218,10 @@ mypy saidso                     # types (strict bug-checks; ships py.typed)
 bandit -r saidso -c pyproject.toml   # security lint
 pip-audit                       # dependency CVEs (zero required deps)
 ```
+
+## Contributing
+
+Contributions are welcome. See [`Docs/CONTRIBUTING.md`](Docs/CONTRIBUTING.md) for guidelines.
 
 ## License
 

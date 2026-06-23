@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:eigenhmax@gmail.com
+    about: Report security vulnerabilities privately by email — not as public issues.
+  - name: Question / discussion
+    url: https://github.com/KarthikRommula/saidso/discussions
+    about: Ask a question or start a discussion.

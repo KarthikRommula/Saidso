@@ -1,9 +1,25 @@
-# saidso — Architecture & Vocabulary
+# Architecture
 
-A grounding firewall for action-taking AI agents. It sits between an agent and its
-consequences and enforces one rule: **nothing is committed (a tool argument) or
-spoken (a fact) unless it traces back to something real — what the user said, or
-what a tool returned.** Anything ungrounded is blocked (fail-closed).
+saidso is a grounding firewall for action-taking AI agents. It enforces one rule:
+**nothing is committed (a tool argument) or spoken (a fact) unless it traces back
+to something real — what the user said, or what a tool returned.** Anything
+ungrounded is blocked before it can cause harm.
+
+---
+
+## The two surfaces
+
+An agent can lie in exactly two places. saidso defends both.
+
+| The agent lies about… | Example failure | saidso defense |
+|---|---|---|
+| **What it does** — a tool argument | books a slot that was never offered | `@grounded` / `@grounded_outputs` |
+| **What it says** — a spoken fact | "booked with Dr. House" (no such doctor) | `render_spoken` / `reconcile_turn` |
+
+The first surface is fail-closed by interception: the tool body never runs if an
+argument is ungrounded. The second surface is fail-closed by construction:
+`render_spoken` assembles the spoken line only from verified facts and raises
+`UngroundedSpeech` if any fact cannot be grounded.
 
 ---
 
@@ -11,120 +27,143 @@ what a tool returned.** Anything ungrounded is blocked (fail-closed).
 
 ```
 saidso/
-├─ __init__.py        Public API surface (everything below is re-exported here)
-├─ policy.py          Policy enum + default confidence thresholds
-├─ context.py         CallContext, call_context() — the per-call scope
-├─ transcript.py      Transcript, Turn — what was said this call
-├─ result.py          GroundingResult, ArgFinding, SteerBack, Span — verdicts
-├─ attestation.py     Attestation, AttestationLog — the audit trail of passes
+├── __init__.py          Public API — everything below is re-exported here
 │
-├─ grounding.py       @grounded            — ground args against the CONVERSATION
-├─ provenance.py      @grounded_outputs    — ground args against TOOL OUTPUT
-│                     from_tool, ToolLedger, reconcile, Resolution, Status
+├── policy.py            Policy enum and per-policy confidence thresholds
+├── transcript.py        Transcript, Turn — the per-call conversation buffer
+├── context.py           CallContext, call_context() — contextvars-based call scope
+├── result.py            GroundingResult, ArgFinding, SteerBack, Span — verdicts
+├── attestation.py       Attestation, AttestationLog — the pass audit trail
 │
-├─ speech/            The "reads" side — guarding what the agent SAYS
-│  ├─ render.py       render_spoken, fact — DETERMINISTIC grounded speech (the guarantee)
-│  └─ monitor.py      find_ungrounded_names — BEST-EFFORT post-turn detection
+├── grounding.py         @grounded — ground args against the CONVERSATION
+├── provenance.py        @grounded_outputs, from_tool, ToolLedger — ground args
+│                        against TOOL OUTPUT; reconcile, Resolution, Status
 │
-├─ _matching/         (private) the SPOKEN/CONFIRMED matching engine
-│  ├─ matcher.py      policy checkers
-│  ├─ normalize.py    number / date / phone / name normalization
-│  └─ fuzz.py         rapidfuzz with a stdlib difflib fallback
+├── speech/
+│   ├── render.py        render_spoken, fact — deterministic grounded speech
+│   ├── reconcile.py     reconcile_turn, ClaimPattern — turn-level claim auditing
+│   └── monitor.py       find_ungrounded_names — best-effort name detection
 │
-├─ observe.py         enable_pretty_logging, EventRecorder, summary — observability
-└─ testing.py         GroundingCase, replay — CI replay harness
+├── observe.py           enable_pretty_logging, EventRecorder, summary
+├── testing.py           GroundingCase — pytest-style replay harness
+│
+└── _matching/           (private) fuzzy-matching engine
+    ├── matcher.py        Per-policy checkers → GroundingResult
+    ├── normalize.py      Number-word, date, phone, and text normalization
+    ├── fuzz.py           rapidfuzz with stdlib difflib fallback
+    └── locale.py         EN / ES locale packs
 ```
 
-**Two layers, on purpose.** The top-level modules are the library's *first-class
-concepts* (flat, because each is a public idea). `speech/` groups the two reads
-tools that form one domain. `_matching/` hides the fuzzy-matching machinery behind a
-leading underscore — internal, may change without notice.
-
 ---
 
-## The mental model
+## Public API reference
 
-An agent can lie in exactly two places. saidso defends both:
+### Decorators
 
-| It lies about… | Example | Defense | Module |
-|---|---|---|---|
-| **What it DOES** (a tool argument) | books slot `#99999` that doesn't exist | ground the argument | `grounding`, `provenance` |
-| **What it SAYS** (a spoken fact) | "booked with Dr. House" (no such doctor) | ground the spoken text | `speech` |
-
----
-
-## Vocabulary
-
-### Decorators (wrap your tool functions)
-
-| Name | Meaning | Grounds against |
+| Name | Grounds against | Behavior on failure |
 |---|---|---|
-| `@grounded(arg=Policy.X)` | the argument must satisfy a policy | the **conversation** (transcript / metadata) |
-| `@grounded_outputs(arg=from_tool(...))` | the argument must trace to a prior tool result | the **ToolLedger** (tool output) |
+| `@grounded(arg=Policy.X)` | The conversation transcript | Returns `SteerBack`; body never runs |
+| `@grounded_outputs(arg=from_tool(...))` | A specific prior tool's return value | Returns `SteerBack`; body never runs |
 
-Both block-and-steer on failure, and rewrite a passing argument to its canonical
-value. They work on sync *and* async functions, positional *and* keyword args.
+Both decorators work on sync and async functions, with positional and keyword
+arguments. A passing argument is rewritten to its **canonical value** (the exact
+string the tool returned or the caller spoke), not the value the model passed in.
 
-### Policies (the rule for an argument, used by `@grounded`)
+### Policies
 
-| Policy | Plain meaning |
+Policies apply to `@grounded`. Each specifies what evidence is required for an
+argument to pass.
+
+| Policy | An argument is grounded if… |
 |---|---|
-| `SPOKEN` | the value appears in what the caller said (numbers/dates/names normalized + fuzzy-matched) |
-| `CONFIRMED` | the agent read it back **and** the caller affirmed it |
-| `CALLER_ID` | the value comes from trusted call metadata, not the model's mouth |
-| `INFERABLE` | the value is derivable from context (e.g. "tomorrow" + clock) or was spoken |
+| `Policy.SPOKEN` | It appears in the caller's transcript (normalized + fuzzy-matched) |
+| `Policy.CONFIRMED` | The agent read it back **and** the caller affirmed it |
+| `Policy.CALLER_ID` | It matches trusted call metadata (not the model's output) |
+| `Policy.INFERABLE` | It is derivable from context ("tomorrow" + clock) or was spoken |
 
-### Provenance (the engine behind `@grounded_outputs`)
+Fine-tune per argument with `Policy.SPOKEN(normalize="spelled-name", threshold=0.85)`.
 
-| Term | Meaning |
+### Provenance
+
+Provenance applies to `@grounded_outputs`. It grounds tool arguments against what
+an earlier read tool actually returned.
+
+| Symbol | Role |
 |---|---|
-| `ToolLedger` | records what each read tool returned this call (`record` / `candidates`) |
-| `from_tool(tool, key, normalize=...)` | declares an argument must originate from a tool's output (one or many sources) |
-| `reconcile(value, candidates, ...)` | the judge: raw-exact → unique-normalized → single-candidate → block; returns the canonical value |
-| `Resolution` / `Status` | the verdict object + its enum (`PASS_EXACT`, `BLOCK_NO_MATCH`, …) |
-| normalizers | `exact`, `casefold`, `e164`, `datetime-minute`, `money` — ignore harmless differences |
+| `ToolLedger` | Accumulates what each read tool returned this call (`record`, `candidates`) |
+| `from_tool(tool, key, normalize=...)` | Declares that an argument must originate from a named tool's output |
+| `reconcile(value, candidates, ...)` | The judge: exact → normalized → single-candidate → block |
+| `Resolution` / `Status` | Verdict object + status enum (`PASS_EXACT`, `BLOCK_NO_MATCH`, …) |
+
+Built-in normalizers: `exact`, `casefold`, `e164`, `datetime-minute`, `money`.
 
 ### Reads (`saidso.speech`)
 
-| Term | Meaning |
+The reads surface guards what the agent says aloud.
+
+| Symbol | Role |
 |---|---|
-| `render_spoken(template, ledger=..., **facts)` | build a spoken line; every fact is verified, ungrounded → `UngroundedSpeech` (speak nothing) |
-| `fact(value, *sources, render=...)` | one interpolated value + its provenance + an optional deterministic formatter |
-| `try_render_spoken(...)` | same, but returns `None` instead of raising |
-| `UngroundedSpeech` | raised when a fact can't be grounded — fail-closed |
-| `find_ungrounded_names(...)` | best-effort post-turn detector for spoken names not in the ground-truth set (a safety net, not a guarantee) |
+| `render_spoken(template, ledger=..., **facts)` | Builds a verified spoken line; raises `UngroundedSpeech` if any fact fails |
+| `fact(value, *sources, render=...)` | One interpolated slot + its provenance + an optional formatter |
+| `try_render_spoken(...)` | Same as `render_spoken` but returns `None` instead of raising |
+| `reconcile_turn(agent_text, attestations=..., claim_patterns=...)` | Flags spoken completion claims not backed by a successful write |
+| `find_ungrounded_names(...)` | Best-effort post-turn detector for names not in the ground-truth set |
+| `attest_action(name, ...)` | Records an argument-less action (`end_call`, `transfer_to_human`) |
 
-saidso never produces audio — `render_spoken` returns the verified **string**; your
-own TTS speaks it (TTS-agnostic).
+`render_spoken` returns the verified **string**. saidso is TTS-agnostic and never
+produces audio.
 
-### Core types & scope
+### Core types and scope
 
-| Term | Meaning |
+| Symbol | Role |
 |---|---|
-| `Transcript` / `Turn` | the conversation buffer (`add_user`, `add_agent`) |
-| `call_context(transcript, ledger=..., tools=..., metadata=...)` | scopes one call so the decorators find what they need (contextvars; async-safe) |
-| `SteerBack` | the "blocked → re-ask" result: `.message`, `.failed`, `.grounded` |
-| `Attestation` / `AttestationLog` | a receipt per passing action; optional JSONL audit trail |
-| `GroundingResult` / `ArgFinding` / `Span` | per-argument verdict detail + transcript location |
-| `GroundingConfig` / `GroundingBlocked` | tuning knobs; the exception raised when `raise_on_block=True` |
+| `Transcript` / `Turn` | The conversation buffer (`add_user`, `add_agent`, `add_system`) |
+| `call_context(transcript, ledger=..., tools=..., metadata=...)` | Opens a call scope so decorators find what they need (contextvars; async-safe) |
+| `SteerBack` | The block-and-steer result: `.message`, `.failed`, `.grounded` |
+| `Attestation` / `AttestationLog` | A receipt per passing action; optional JSONL audit trail |
+| `GroundingConfig` | Per-decorator tuning: `raise_on_block`, `enforce` (shadow mode), `steer_style` |
 
-### Observability (`saidso.observe`)
+### Observability
 
-| Term | Meaning |
+| Symbol | Role |
 |---|---|
-| `enable_pretty_logging()` | colored ✓/✗ live stream (auto-off when not a TTY) |
-| `EventRecorder` | captures the structured event stream (`.passed`, `.blocked`) |
-| `summary(audit, recorder)` | end-of-run counts + one row per decision |
+| `enable_pretty_logging()` | Colored ✓/✗ live stream to stdout (auto-disabled when not a TTY) |
+| `EventRecorder` | Captures the structured event stream (`.passed`, `.blocked`) |
+| `summary(audit, recorder)` | End-of-call counts and one row per decision |
 
-Every decision emits one structured log event on the `saidso` logger
-(`saidso_event` = `pass`/`block`, with `saidso_action` / `saidso_args`).
+Every decision emits a structured log event on the `saidso` logger with keys
+`saidso_event` (`pass` / `block`), `saidso_action`, and `saidso_args`.
+
+### Testing
+
+```python
+from saidso.testing import GroundingCase
+
+def test_invented_dob_is_blocked():
+    (GroundingCase(register_patient)
+        .user("Hi, I'd like an appointment")
+        .call(name="John Doe", dob="1990-01-01")
+        .assert_blocked("name", "dob"))
+```
+
+`GroundingCase` builds a transcript, opens a call context, and provides
+`assert_blocked` / `assert_grounded` / `assert_rewritten` assertions.
 
 ---
 
 ## Design principles
 
-- **Fail-closed** — a check that errors blocks; a broken metal detector locks the door.
-- **Deterministic & fast** — pure Python, in-process; a write check is ~12µs.
-- **Zero required dependencies** — `rapidfuzz` optional (stdlib `difflib` fallback).
-- **Model- & platform-agnostic** — no model SDK is imported anywhere; saidso operates on
-  text, function arguments, and recorded tool outputs, which every stack has.
+**Fail-closed.** Any exception inside a grounding check is treated as a block,
+not a pass. A broken metal detector locks the door.
+
+**Deterministic and fast.** Pure Python, in-process. A write check is ~12 µs —
+roughly 1/2000th of a single backend round-trip.
+
+**Zero required dependencies.** `rapidfuzz` is used when installed
+(`pip install saidso[fast]`); stdlib `difflib` is the fallback. Ships `py.typed`.
+
+**Model- and platform-agnostic.** No model SDK is imported. saidso operates on
+text, function arguments, and recorded tool outputs — primitives every stack exposes.
+
+**Validated at import time.** A `@grounded` policy naming a non-existent
+parameter raises immediately on decoration, not at runtime.

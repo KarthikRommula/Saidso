@@ -167,3 +167,21 @@ def test_cleanup_pip_temp_removes_leftover(monkeypatch, tmp_path):
     monkeypatch.setattr(cli.tempfile, "gettempdir", lambda: str(tmp_path))
     cli._cleanup_pip_temp()
     assert not leftover.exists()  # stale backup dir swept
+
+
+def test_docs_renders_with_color(monkeypatch, capsys):
+    monkeypatch.setattr("saidso.cli._supports_color", lambda stream: True)
+    assert main(["docs", "overview"]) == 0
+    assert "\033[" in capsys.readouterr().out  # ANSI heading styling applied
+
+
+def test_upgrade_reports_when_pip_missing(monkeypatch, capsys):
+    monkeypatch.setattr("saidso.cli.subprocess.Popen", lambda *a, **k: (_ for _ in ()).throw(OSError("no pip")))
+    assert main(["upgrade"]) == 1
+    assert "could not run pip" in capsys.readouterr().err
+
+
+def test_uninstall_reports_when_pip_missing(monkeypatch, capsys):
+    monkeypatch.setattr("saidso.cli.subprocess.Popen", lambda *a, **k: (_ for _ in ()).throw(OSError("no pip")))
+    assert main(["uninstall"]) == 1
+    assert "could not run pip" in capsys.readouterr().err

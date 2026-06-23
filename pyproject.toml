@@ -43,9 +43,11 @@ dev = [
     "pip-audit>=2.7",
 ]
 
-# No GitHub repo — the PyPI project page (rendered from README.md) is the home.
 [project.urls]
-Homepage = "https://pypi.org/project/saidso/"
+Homepage = "https://github.com/KarthikRommula/saidso"
+Source = "https://github.com/KarthikRommula/saidso"
+Issues = "https://github.com/KarthikRommula/saidso/issues"
+Changelog = "https://github.com/KarthikRommula/saidso/blob/main/Docs/CHANGELOG.md"
 
 [project.scripts]
 saidso = "saidso.cli:main"
